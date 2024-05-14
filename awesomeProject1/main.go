@@ -2,22 +2,16 @@ package main
 
 import (
 	"awesomeProject1/crypto"
-	"fmt"
 	"net/http"
 )
 
 func main() {
 
-	encrypted, errs := crypto.Encrypt("hellocemo", "key")
-	if errs != nil {
-		return
-	}
+	encrypted := crypto.Encrypt("hellocemo")
+
 	print(encrypted + ": this is the encrypted text")
-	decrypted, errs := crypto.Decrypt(encrypted, "key")
-	if errs != nil {
-		fmt.Printf("error: %v", errs)
-		return
-	}
+	decrypted := crypto.Decrypt(encrypted)
+
 	print(decrypted + ": this is the decrypted text")
 
 	http.HandleFunc("/hello", hello)
@@ -51,15 +45,8 @@ func hello(w http.ResponseWriter, r *http.Request) {
 }
 func encrypt(w http.ResponseWriter, r *http.Request) {
 	text := r.FormValue("text")
-	key := r.FormValue("key")
 
-	crypt, err := crypto.Encrypt(text, key)
-	if err != nil {
-		return
-	}
+	crypt := crypto.Encrypt(text)
 
-	_, err = w.Write([]byte(crypt))
-	if err != nil {
-		return
-	}
+	_, _ = w.Write([]byte(crypt))
 }

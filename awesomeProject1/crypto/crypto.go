@@ -4,10 +4,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-	"fmt"
-	"golang.org/x/crypto/pbkdf2"
 )
 
 const (
@@ -16,69 +12,57 @@ const (
 	iterations = 1000
 )
 
-func Encrypt(plaintext, passphrase string) (string, error) {
+var (
+	secretKey = "N1PCdw3M2B1TfJhoaY2mL736p2vCUc47"
+)
 
-	salt := make([]byte, saltSize)
-	_, err := rand.Read(salt)
+func Encrypt(plaintext string) string {
+	aes, err := aes.NewCipher([]byte(secretKey))
 	if err != nil {
-		return "", err
+		panic(err)
 	}
 
-	key := pbkdf2.Key([]byte(passphrase), salt, iterations, keySize/8, sha256.New)
-
-	block, err := aes.NewCipher(key)
+	gcm, err := cipher.NewGCM(aes)
 	if err != nil {
-		return "", err
+		panic(err)
 	}
 
-	aesGCM, err := cipher.NewGCM(block)
+	// We need a 12-byte nonce for GCM (modifiable if you use cipher.NewGCMWithNonceSize())
+	// A nonce should always be randomly generated for every encryption.
+	nonce := make([]byte, gcm.NonceSize())
+	_, err = rand.Read(nonce)
 	if err != nil {
-		return "", err
+		panic(err)
 	}
 
-	const gcmNonceSize = 12
-	iv := make([]byte, gcmNonceSize)
-	_, err = rand.Read(iv)
-	if err != nil {
-		return "", err
-	}
+	// ciphertext here is actually nonce+ciphertext
+	// So that when we decrypt, just knowing the nonce size
+	// is enough to separate it from the ciphertext.
+	ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
 
-	encryptedData := aesGCM.Seal(nil, iv, []byte(plaintext), nil)
-
-	ciphertext := append(salt, iv...)
-	ciphertext = append(ciphertext, encryptedData...)
-
-	return base64.StdEncoding.EncodeToString(ciphertext), nil
+	return string(ciphertext)
 }
 
-func Decrypt(ciphertext, passphrase string) (string, error) {
-	cipherBytes, err := base64.StdEncoding.DecodeString(ciphertext)
+func Decrypt(ciphertext string) string {
+	block, err := aes.NewCipher([]byte(secretKey))
 	if err != nil {
-		return "", err
-	}
-	const gcmNonceSize = 12
-
-	salt := cipherBytes[:saltSize]
-	iv := cipherBytes[saltSize : saltSize+gcmNonceSize]
-	encryptedData := cipherBytes[saltSize+aes.BlockSize:]
-
-	key := pbkdf2.Key([]byte(passphrase), salt, iterations, keySize/8, sha256.New)
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
+		panic(err)
 	}
 
-	aesGCM, err := cipher.NewGCM(block)
+	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", err
+		panic(err)
 	}
 
-	plaintext, err := aesGCM.Open(nil, iv, encryptedData, nil)
+	// Since we know the ciphertext is actually nonce+ciphertext
+	// And len(nonce) == NonceSize(). We can separate the two.
+	nonceSize := gcm.NonceSize()
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+
+	plaintext, err := gcm.Open(nil, []byte(nonce), []byte(ciphertext), nil)
 	if err != nil {
-		fmt.Println("Error while decrypting:", err)
-		return "", err
+		panic(err)
 	}
 
-	return string(plaintext), nil
+	return string(plaintext)
 }
