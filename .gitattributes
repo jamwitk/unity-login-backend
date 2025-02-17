@@ -1,2 +1,2 @@
 *.shader linguist-vendored
-*.cgnic linguist-vendored
+*.cginc linguist-vendored
